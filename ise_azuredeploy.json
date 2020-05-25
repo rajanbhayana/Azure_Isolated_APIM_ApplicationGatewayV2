@@ -1,0 +1,106 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+      "integrationServiceEnvironmentName": {
+        "type": "string",
+        "defaultValue":"integrationServiceEnvironmentName",
+        "metadata": {
+          "description": "The name of the Integration Service Environment."
+        }
+      },
+      "location": {
+        "defaultValue": "[resourceGroup().location]",
+        "type": "string",
+        "metadata": {
+          "description": "Location for all resources."
+        }
+      },
+      "integrationServiceEnvironmentSku": {
+        "type": "string",
+        "defaultValue": "Developer",
+        "allowedValues": ["Developer", "Premium"],
+        "metadata": {
+          "description": "The SKU for the Integration Service Environment, either Developer or Premium."
+        }
+      },
+      "skuCapacity": {
+        "defaultValue": 0,
+        "type": "int",
+        "metadata": {
+          "description": "The number of scale units for the Integration Service Environment. 0 is the base unit."
+        }
+      },
+      "accessEndpointType": {
+        "type": "string",
+        "defaultValue": "Internal",
+        "allowedValues": ["Internal", "External"],
+        "metadata": {
+          "description": "The type of access endpoint to use for the Integration Service Environment. The endpoint determine whether request or webhook triggers on logic apps in the Integration Service Environment can receive calls from outside the virtual network."
+        }
+      },
+      "managedConnectors": {
+        "type": "array",
+        "defaultValue":["servicebus", "azureblob"],
+        "metadata": {
+          "description": "The list of managed connectors to deploy into the ISE in JSON array format (e.g. [\"sql\", \"ftp\" ...]). The values must be from this list: sql;ftp;azureblob;azurefile;azurequeues;azuretables;sftpwithssh;edifact;x12;servicebus;documentdb;eventhubs;mq;sqldw;db2;smtp;si3270"
+        }
+      }
+  },
+  "variables": {
+    "vnetName" : "myvnet-vnet",
+    "subnet1Name":"logicapp-subnet-1",
+    "subnet2Name":"logicapp-subnet-2",
+    "subnet3Name":"logicapp-subnet-3",
+    "subnet4Name":"logicapp-subnet-4"
+  },
+  "resources": [
+      {
+          "type": "Microsoft.Logic/integrationServiceEnvironments",
+          "apiVersion": "2019-05-01",
+          "name": "[parameters('integrationServiceEnvironmentName')]",
+          "location": "[parameters('location')]",
+          "sku": {
+              "name": "[parameters('integrationServiceEnvironmentSku')]",
+              "capacity": "[parameters('skuCapacity')]"
+          },
+          "properties": {
+              "networkConfiguration": {
+                  "accessEndpoint": {
+                    "type": "[parameters('accessEndpointType')]"
+                  },
+                  "subnets":
+                  [
+                      {
+                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnet1Name'))]"
+                      },
+                      {
+                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnet2Name'))]"
+                      },
+                      {
+                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnet3Name'))]"
+                      },
+                      {
+                          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnet4Name'))]"
+                      }
+                  ]
+              }
+          }
+      },
+      {
+        "apiVersion": "2019-05-01",
+        "type": "Microsoft.Logic/integrationServiceEnvironments/ManagedApis",
+        "name": "[concat(parameters('integrationServiceEnvironmentName'), '/', parameters('managedConnectors')[copyindex()])]",
+        "location": "[parameters('location')]",
+        "dependsOn": [
+          "[concat('Microsoft.Logic/integrationServiceEnvironments/', parameters('integrationServiceEnvironmentName'))]"
+        ],
+        "copy": {
+            "name": "queueCopy",
+            "count": "[length(parameters('managedConnectors'))]"
+        },
+        "properties": {
+        }
+      }
+  ]
+}
